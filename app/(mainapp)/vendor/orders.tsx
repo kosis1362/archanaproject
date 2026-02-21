@@ -6,9 +6,10 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
+    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Package, Truck, CheckCircle, Clock, MoreVertical } from 'lucide-react-native';
+import { Package, Truck, CheckCircle, Clock, MapPin, Phone, User, ChevronRight } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { recentOrders } from '@/mocks/data';
 
@@ -31,9 +32,27 @@ export default function VendorOrdersScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Orders</Text>
-                <View style={styles.orderCount}>
-                    <Text style={styles.orderCountText}>{recentOrders.length} orders</Text>
+                <Text style={styles.headerTitle}>Order Management</Text>
+            </View>
+
+            <View style={styles.summaryContainer}>
+                <View style={styles.summaryItem}>
+                    <Text style={styles.summaryValue}>{recentOrders.length}</Text>
+                    <Text style={styles.summaryLabel}>Total Orders</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                    <Text style={[styles.summaryValue, { color: '#DC2626' }]}>
+                        {recentOrders.filter(o => o.status === 'pending').length}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Pending</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                    <Text style={[styles.summaryValue, { color: '#2563EB' }]}>
+                        {recentOrders.filter(o => o.status === 'delivered').length}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Delivered</Text>
                 </View>
             </View>
 
@@ -50,80 +69,96 @@ export default function VendorOrdersScreen() {
             </ScrollView>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {filteredOrders.map(order => {
-                    const status = statusConfig[order.status] || statusConfig.pending;
-                    const StatusIcon = status.icon;
+                {filteredOrders.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Package size={48} color={colors.textSecondary} />
+                        <Text style={styles.emptyText}>No {activeTab.toLowerCase()} orders found</Text>
+                    </View>
+                ) : (
+                    filteredOrders.map(order => {
+                        const status = statusConfig[order.status] || statusConfig.pending;
+                        const StatusIcon = status.icon;
 
-                    return (
-                        <View key={order.id} style={styles.orderCard}>
-                            <View style={styles.orderHeader}>
-                                <View style={styles.orderIdContainer}>
-                                    <Text style={styles.orderId}>Order #{order.id}</Text>
+                        return (
+                            <View key={order.id} style={styles.orderCard}>
+                                <View style={styles.orderCardHeader}>
+                                    <View style={styles.orderIdGroup}>
+                                        <Text style={styles.orderId}>Order #{order.id}</Text>
+                                        <Text style={styles.orderDate}>Today, 10:30 AM</Text>
+                                    </View>
                                     <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
                                         <StatusIcon size={12} color={status.color} />
                                         <Text style={[styles.statusText, { color: status.color }]}>
-                                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                                            {order.status.toUpperCase()}
                                         </Text>
                                     </View>
                                 </View>
-                                <TouchableOpacity>
-                                    <MoreVertical size={18} color={colors.textSecondary} />
-                                </TouchableOpacity>
-                            </View>
 
-                            <View style={styles.customerInfo}>
-                                <Text style={styles.customerName}>{order.customerName}</Text>
-                                <Text style={styles.customerLocation}>{order.customerLocation}</Text>
-                            </View>
+                                <View style={styles.customerDetailSection}>
+                                    <View style={styles.detailRow}>
+                                        <User size={16} color={colors.primary} />
+                                        <Text style={styles.detailText}>{order.customerName}</Text>
+                                    </View>
+                                    <View style={styles.detailRow}>
+                                        <Phone size={16} color={colors.primary} />
+                                        <Text style={styles.detailText}>+977 98XXXXXXXX</Text>
+                                    </View>
+                                    <View style={styles.detailRow}>
+                                        <MapPin size={16} color={colors.primary} />
+                                        <Text style={styles.detailText} numberOfLines={1}>{order.customerLocation}</Text>
+                                    </View>
+                                </View>
 
-                            <View style={styles.itemsContainer}>
-                                {order.items.map((item, index) => (
-                                    <View key={index} style={styles.orderItem}>
-                                        <Image source={{ uri: item.productImage }} style={styles.itemImage} />
-                                        <View style={styles.itemInfo}>
-                                            <Text style={styles.itemName} numberOfLines={1}>{item.productName}</Text>
-                                            <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
+                                <View style={styles.itemsList}>
+                                    {order.items.map((item, index) => (
+                                        <View key={index} style={styles.orderItemRow}>
+                                            <Image source={{ uri: item.productImage }} style={styles.itemThumb} />
+                                            <View style={styles.itemMainInfo}>
+                                                <Text style={styles.itemName} numberOfLines={1}>{item.productName}</Text>
+                                                <Text style={styles.itemMeta}>Qty: {item.quantity} • Price: रू{item.price.toLocaleString()}</Text>
+                                            </View>
+                                            <Text style={styles.itemSubtotal}>रू{(item.price * item.quantity).toLocaleString()}</Text>
                                         </View>
-                                        <Text style={styles.itemPrice}>रू{item.price.toLocaleString()}</Text>
-                                    </View>
-                                ))}
-                            </View>
+                                    ))}
+                                </View>
 
-                            <View style={styles.orderFooter}>
-                                <View style={styles.paymentInfo}>
-                                    <Text style={styles.paymentLabel}>Payment:</Text>
-                                    <Text style={styles.paymentMethod}>{order.paymentMethod.toUpperCase()}</Text>
-                                    <View style={[styles.paymentStatus, { backgroundColor: order.paymentStatus === 'paid' ? '#D1FAE5' : '#FEF3C7' }]}>
-                                        <Text style={[styles.paymentStatusText, { color: order.paymentStatus === 'paid' ? '#059669' : '#D97706' }]}>
-                                            {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
-                                        </Text>
+                                <View style={styles.orderPricing}>
+                                    <View style={styles.priceRow}>
+                                        <Text style={styles.priceLabel}>Payment Mode:</Text>
+                                        <Text style={styles.priceValue}>{order.paymentMethod.toUpperCase()}</Text>
+                                    </View>
+                                    <View style={[styles.priceRow, styles.totalRow]}>
+                                        <Text style={styles.totalLabel}>Grand Total</Text>
+                                        <Text style={styles.totalValue}>रू{order.totalAmount.toLocaleString()}</Text>
                                     </View>
                                 </View>
-                                <View style={styles.totalContainer}>
-                                    <Text style={styles.totalLabel}>Total</Text>
-                                    <Text style={styles.totalAmount}>रू{order.totalAmount.toLocaleString()}</Text>
+
+                                <View style={styles.horizontalActions}>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.secondaryBtn]}>
+                                        <Text style={styles.secondaryBtnText}>View Full Details</Text>
+                                    </TouchableOpacity>
+
+                                    {order.status === 'pending' && (
+                                        <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]}>
+                                            <Text style={styles.primaryBtnText}>Accept Order</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    {order.status === 'processing' && (
+                                        <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]}>
+                                            <Text style={styles.primaryBtnText}>Mark Shipped</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    {order.status === 'shipped' && (
+                                        <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]}>
+                                            <Text style={styles.primaryBtnText}>Mark Delivered</Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             </View>
-
-                            <View style={styles.actionButtons}>
-                                <TouchableOpacity style={styles.secondaryButton}>
-                                    <Text style={styles.secondaryButtonText}>View Details</Text>
-                                </TouchableOpacity>
-                                {order.status === 'pending' && (
-                                    <TouchableOpacity style={styles.primaryButton}>
-                                        <Text style={styles.primaryButtonText}>Accept Order</Text>
-                                    </TouchableOpacity>
-                                )}
-                                {order.status === 'processing' && (
-                                    <TouchableOpacity style={styles.primaryButton}>
-                                        <Text style={styles.primaryButtonText}>Mark Shipped</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        </View>
-                    );
-                })}
-                <View style={styles.bottomPadding} />
+                        );
+                    })
+                )}
+                <View style={styles.bottomSpace} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -135,49 +170,73 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         padding: 16,
         backgroundColor: colors.white,
         borderBottomWidth: 1,
         borderBottomColor: colors.borderLight,
     },
     headerTitle: {
-        fontSize: 20,
-        fontWeight: '700' as const,
+        fontSize: 22,
+        fontWeight: '800' as const,
         color: colors.text,
     },
-    orderCount: {
-        backgroundColor: colors.cherryLight,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
+    summaryContainer: {
+        flexDirection: 'row',
+        backgroundColor: colors.white,
+        margin: 16,
+        padding: 20,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 5,
+        alignItems: 'center',
     },
-    orderCountText: {
-        fontSize: 13,
-        fontWeight: '500' as const,
-        color: colors.primary,
+    summaryItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    summaryValue: {
+        fontSize: 24,
+        fontWeight: '900' as const,
+        color: colors.text,
+    },
+    summaryLabel: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginTop: 4,
+        fontWeight: '600' as const,
+    },
+    summaryDivider: {
+        width: 1,
+        height: 40,
+        backgroundColor: colors.borderLight,
+        marginHorizontal: 10,
     },
     tabsContainer: {
         backgroundColor: colors.white,
         paddingHorizontal: 12,
         paddingVertical: 12,
+        maxHeight: 70,
     },
     tab: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        marginHorizontal: 4,
-        borderRadius: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        marginHorizontal: 6,
+        borderRadius: 25,
         backgroundColor: colors.borderLight,
+        borderWidth: 1,
+        borderColor: 'transparent',
     },
     tabActive: {
         backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
     tabText: {
-        fontSize: 13,
+        fontSize: 14,
         color: colors.textSecondary,
-        fontWeight: '500' as const,
+        fontWeight: '700' as const,
     },
     tabTextActive: {
         color: colors.white,
@@ -188,160 +247,174 @@ const styles = StyleSheet.create({
     },
     orderCard: {
         backgroundColor: colors.white,
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 16,
-        marginBottom: 16,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
     },
-    orderHeader: {
+    orderCardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        borderBottomWidth: 1,
+        borderBottomColor: colors.borderLight,
+        paddingBottom: 12,
         marginBottom: 12,
     },
-    orderIdContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
+    orderIdGroup: {
+        gap: 2,
     },
     orderId: {
-        fontSize: 15,
-        fontWeight: '600' as const,
+        fontSize: 16,
+        fontWeight: '800' as const,
         color: colors.text,
+    },
+    orderDate: {
+        fontSize: 11,
+        color: colors.textSecondary,
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        gap: 6,
     },
     statusText: {
-        fontSize: 11,
-        fontWeight: '600' as const,
+        fontSize: 10,
+        fontWeight: '800' as const,
     },
-    customerInfo: {
-        marginBottom: 12,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.borderLight,
+    customerDetailSection: {
+        backgroundColor: colors.background,
+        borderRadius: 12,
+        padding: 12,
+        gap: 8,
+        marginBottom: 16,
     },
-    customerName: {
-        fontSize: 14,
-        fontWeight: '500' as const,
-        color: colors.text,
-    },
-    customerLocation: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
-    itemsContainer: {
-        marginBottom: 12,
-    },
-    orderItem: {
+    detailRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
+        gap: 10,
     },
-    itemImage: {
-        width: 48,
-        height: 48,
-        borderRadius: 8,
+    detailText: {
+        fontSize: 13,
+        color: colors.text,
+        fontWeight: '500' as const,
     },
-    itemInfo: {
+    itemsList: {
+        gap: 12,
+        marginBottom: 16,
+    },
+    orderItemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    itemThumb: {
+        width: 50,
+        height: 50,
+        borderRadius: 10,
+    },
+    itemMainInfo: {
         flex: 1,
-        marginLeft: 12,
     },
     itemName: {
-        fontSize: 13,
-        fontWeight: '500' as const,
+        fontSize: 14,
+        fontWeight: '700' as const,
         color: colors.text,
     },
-    itemQuantity: {
+    itemMeta: {
         fontSize: 12,
         color: colors.textSecondary,
         marginTop: 2,
     },
-    itemPrice: {
+    itemSubtotal: {
         fontSize: 14,
-        fontWeight: '600' as const,
+        fontWeight: '700' as const,
         color: colors.text,
     },
-    orderFooter: {
+    orderPricing: {
+        borderTopWidth: 1,
+        borderTopColor: colors.borderLight,
+        paddingTop: 12,
+        gap: 6,
+        marginBottom: 16,
+    },
+    priceRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: colors.borderLight,
-        marginBottom: 12,
     },
-    paymentInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    paymentLabel: {
-        fontSize: 12,
+    priceLabel: {
+        fontSize: 13,
         color: colors.textSecondary,
     },
-    paymentMethod: {
-        fontSize: 12,
-        fontWeight: '600' as const,
+    priceValue: {
+        fontSize: 13,
+        fontWeight: '700' as const,
         color: colors.text,
     },
-    paymentStatus: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    paymentStatusText: {
-        fontSize: 10,
-        fontWeight: '600' as const,
-    },
-    totalContainer: {
-        alignItems: 'flex-end',
+    totalRow: {
+        marginTop: 4,
     },
     totalLabel: {
-        fontSize: 11,
-        color: colors.textSecondary,
+        fontSize: 15,
+        fontWeight: '800' as const,
+        color: colors.text,
     },
-    totalAmount: {
-        fontSize: 18,
-        fontWeight: '700' as const,
+    totalValue: {
+        fontSize: 20,
+        fontWeight: '900' as const,
         color: colors.primary,
     },
-    actionButtons: {
+    horizontalActions: {
         flexDirection: 'row',
         gap: 10,
     },
-    secondaryButton: {
+    actionBtn: {
         flex: 1,
-        paddingVertical: 12,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: colors.border,
+        height: 48,
+        borderRadius: 12,
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    secondaryButtonText: {
-        fontSize: 13,
-        fontWeight: '600' as const,
-        color: colors.text,
-    },
-    primaryButton: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: 10,
+    primaryBtn: {
         backgroundColor: colors.primary,
-        alignItems: 'center',
     },
-    primaryButtonText: {
-        fontSize: 13,
-        fontWeight: '600' as const,
+    secondaryBtn: {
+        backgroundColor: colors.white,
+        borderWidth: 1.5,
+        borderColor: colors.border,
+    },
+    primaryBtnText: {
         color: colors.white,
+        fontSize: 14,
+        fontWeight: '700' as const,
     },
-    bottomPadding: {
-        height: 20,
+    secondaryBtnText: {
+        color: colors.text,
+        fontSize: 14,
+        fontWeight: '700' as const,
+    },
+    emptyState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 60,
+        gap: 16,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: colors.textSecondary,
+        fontWeight: '600' as const,
+    },
+    bottomSpace: {
+        height: 40,
     },
 });

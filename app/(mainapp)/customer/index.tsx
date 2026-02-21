@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -9,6 +9,7 @@ import {
     TextInput,
     Dimensions,
     Animated,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -22,15 +23,18 @@ import {
     ChevronRight,
     Star,
     Heart,
+    Store,
 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { products, categories, liveSessions } from '@/mocks/data';
+import { products as mockProducts, categories, liveSessions as mockLive } from '@/mocks/data';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Product } from '@/types';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
-function LiveSessionCard({ session }: { session: typeof liveSessions[0] }) {
+function LiveSessionCard({ session }: { session: any }) {
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -43,8 +47,12 @@ function LiveSessionCard({ session }: { session: typeof liveSessions[0] }) {
     }, []);
 
     return (
-        <TouchableOpacity style={styles.liveCard} activeOpacity={0.9}>
-            <Image source={{ uri: session.thumbnail }} style={styles.liveThumbnail} />
+        <TouchableOpacity
+            style={styles.liveCard}
+            activeOpacity={0.9}
+            onPress={() => router.push(`/live/${session.id}`)}
+        >
+            <Image source={{ uri: session.thumbnail_url || 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400' }} style={styles.liveThumbnail} />
             <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.8)']}
                 style={styles.liveGradient}
@@ -54,22 +62,24 @@ function LiveSessionCard({ session }: { session: typeof liveSessions[0] }) {
                 <Text style={styles.liveText}>LIVE</Text>
             </View>
             <View style={styles.liveViewers}>
-                <Text style={styles.viewerCount}>{session.viewerCount} watching</Text>
+                <Text style={styles.viewerCount}>{session.viewer_count || 0} watching</Text>
             </View>
             <View style={styles.liveInfo}>
-                <Image source={{ uri: session.vendorAvatar }} style={styles.vendorAvatar} />
+                <Image source={{ uri: session.vendor_avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100' }} style={styles.vendorAvatar} />
                 <View style={styles.liveDetails}>
                     <Text style={styles.liveTitle} numberOfLines={1}>{session.title}</Text>
-                    <Text style={styles.vendorName}>{session.vendorName}</Text>
+                    <Text style={styles.vendorName}>{session.vendor_name || 'Vendor'}</Text>
                 </View>
             </View>
         </TouchableOpacity>
     );
 }
 
-function ProductCard({ product }: { product: Product }) {
-    const discount = product.originalPrice
-        ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+function ProductCard({ product }: { product: any }) {
+    const price = product.price || 0;
+    const originalPrice = product.original_price || product.originalPrice;
+    const discount = originalPrice
+        ? Math.round(((originalPrice - price) / originalPrice) * 100)
         : 0;
 
     return (
@@ -79,7 +89,9 @@ function ProductCard({ product }: { product: Product }) {
             onPress={() => router.push(`/product/${product.id}`)}
         >
             <View style={styles.productImageContainer}>
-                <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                {product.images?.[0] && (
+                    <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                )}
                 <TouchableOpacity style={styles.wishlistButton}>
                     <Heart size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
@@ -88,7 +100,7 @@ function ProductCard({ product }: { product: Product }) {
                         <Text style={styles.discountText}>{discount}% OFF</Text>
                     </View>
                 )}
-                {product.isFlashDeal && (
+                {(product.isFlashDeal || product.is_flash_deal) && (
                     <View style={styles.flashBadge}>
                         <Zap size={12} color={colors.white} fill={colors.white} />
                     </View>
@@ -98,13 +110,13 @@ function ProductCard({ product }: { product: Product }) {
                 <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
                 <View style={styles.ratingRow}>
                     <Star size={12} color={colors.secondary} fill={colors.secondary} />
-                    <Text style={styles.rating}>{product.rating}</Text>
-                    <Text style={styles.reviews}>({product.totalReviews})</Text>
+                    <Text style={styles.rating}>{product.rating || '0.0'}</Text>
+                    <Text style={styles.reviews}>({product.total_reviews || product.totalReviews || 0})</Text>
                 </View>
                 <View style={styles.priceRow}>
-                    <Text style={styles.price}>रू{product.price.toLocaleString()}</Text>
-                    {product.originalPrice && (
-                        <Text style={styles.originalPrice}>रू{product.originalPrice.toLocaleString()}</Text>
+                    <Text style={styles.price}>रू{price.toLocaleString()}</Text>
+                    {originalPrice && (
+                        <Text style={styles.originalPrice}>रू{originalPrice.toLocaleString()}</Text>
                     )}
                 </View>
             </View>
@@ -124,7 +136,36 @@ function CategoryCard({ category }: { category: typeof categories[0] }) {
 }
 
 export default function CustomerHomeScreen() {
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
     const { t } = useLanguage();
+    const [products, setProducts] = useState<any[]>([]);
+    const [liveSessions, setLiveSessions] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) {
+            router.replace('/');
+            return;
+        }
+        fetchData();
+    }, [isAuthenticated, authLoading]);
+
+    const fetchData = async () => {
+        try {
+            setIsLoading(true);
+            const [productsRes, liveRes] = await Promise.all([
+                supabase.from('products').select('*').order('created_at', { ascending: false }),
+                supabase.from('live_sessions').select('*').eq('is_live', true)
+            ]);
+
+            setProducts(productsRes.data || []);
+            setLiveSessions(liveRes.data || []);
+        } catch (error) {
+            console.error('Error fetching customer data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -140,15 +181,40 @@ export default function CustomerHomeScreen() {
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.searchContainer}>
-                <View style={styles.searchBox}>
-                    <Search size={20} color={colors.textSecondary} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search products, vendors..."
-                        placeholderTextColor={colors.textSecondary}
-                    />
-                </View>
+            <View style={styles.quickActionsContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRow}>
+                    <TouchableOpacity
+                        style={[styles.actionChip, { backgroundColor: colors.cherryLight }]}
+                        onPress={() => router.push('/customer/live-marketplace')}
+                    >
+                        <Radio size={18} color={colors.primary} />
+                        <Text style={[styles.actionChipText, { color: colors.primary }]}>Live Marketplace</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionChip}
+                        onPress={() => router.push('/customer/search?tab=categories')}
+                    >
+                        <Zap size={18} color={colors.secondary} />
+                        <Text style={styles.actionChipText}>Browse Categories</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionChip}
+                        onPress={() => router.push('/customer/search?tab=vendors')}
+                    >
+                        <Store size={18} color={colors.textSecondary} />
+                        <Text style={styles.actionChipText}>Search Vendors</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionChip}
+                        onPress={() => router.push('/customer/search')}
+                    >
+                        <Search size={18} color={colors.textSecondary} />
+                        <Text style={styles.actionChipText}>Find Products</Text>
+                    </TouchableOpacity>
+                </ScrollView>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
@@ -158,21 +224,27 @@ export default function CustomerHomeScreen() {
                             <Radio size={20} color={colors.primary} />
                             <Text style={styles.sectionTitle}>{t('liveNow')}</Text>
                         </View>
-                        <TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.push('/customer/live-marketplace')}>
                             <Text style={styles.viewAllText}>{t('viewAll')}</Text>
                         </TouchableOpacity>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.liveScroll}>
-                        {liveSessions.map(session => (
-                            <LiveSessionCard key={session.id} session={session} />
-                        ))}
+                        {isLoading ? (
+                            <ActivityIndicator color={colors.primary} style={{ marginLeft: 20 }} />
+                        ) : liveSessions.length === 0 ? (
+                            <Text style={styles.emptyTextSub}>No active live sessions</Text>
+                        ) : (
+                            liveSessions.map(session => (
+                                <LiveSessionCard key={session.id} session={session} />
+                            ))
+                        )}
                     </ScrollView>
                 </View>
 
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>{t('categories')}</Text>
-                        <TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.push('/customer/search?tab=categories')}>
                             <Text style={styles.viewAllText}>{t('viewAll')}</Text>
                         </TouchableOpacity>
                     </View>
@@ -194,9 +266,15 @@ export default function CustomerHomeScreen() {
                         </TouchableOpacity>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {products.filter(p => p.isFlashDeal || p.originalPrice).map(product => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
+                        {isLoading ? (
+                            <ActivityIndicator color={colors.primary} style={{ marginLeft: 20 }} />
+                        ) : products.filter(p => p.is_flash_deal || p.original_price).length === 0 ? (
+                            <Text style={styles.emptyTextSub}>No deals today</Text>
+                        ) : (
+                            products.filter(p => p.is_flash_deal || p.original_price).map(product => (
+                                <ProductCard key={product.id} product={product} />
+                            ))
+                        )}
                     </ScrollView>
                 </View>
 
@@ -252,28 +330,31 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         backgroundColor: colors.primary,
     },
-    searchContainer: {
-        paddingHorizontal: 16,
-        marginBottom: 16,
+    quickActionsContainer: {
+        marginBottom: 20,
     },
-    searchBox: {
+    quickActionsRow: {
+        paddingHorizontal: 16,
+        gap: 12,
+    },
+    actionChip: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.white,
-        borderRadius: 12,
         paddingHorizontal: 16,
-        height: 48,
+        paddingVertical: 10,
+        borderRadius: 12,
+        gap: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 8,
         elevation: 2,
     },
-    searchInput: {
-        flex: 1,
-        fontSize: 15,
+    actionChipText: {
+        fontSize: 14,
+        fontWeight: '600',
         color: colors.text,
-        marginLeft: 12,
     },
     content: {
         flex: 1,
@@ -527,5 +608,11 @@ const styles = StyleSheet.create({
     },
     bottomPadding: {
         height: 20,
+    },
+    emptyTextSub: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        marginLeft: 16,
+        fontStyle: 'italic',
     },
 });

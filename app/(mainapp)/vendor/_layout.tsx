@@ -6,6 +6,7 @@ import {
     Radio,
     BarChart3,
     Wallet,
+    User,
 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 
@@ -31,8 +32,16 @@ export default function VendorLayout() {
             }}
         >
             <Tabs.Screen
+                name="profile"
+                options={{
+                    title: 'Profile',
+                    tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+                }}
+            />
+            <Tabs.Screen
                 name="index"
                 options={{
+                    href: null,
                     title: 'Dashboard',
                     tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} />,
                 }}
@@ -61,6 +70,7 @@ export default function VendorLayout() {
             <Tabs.Screen
                 name="analytics"
                 options={{
+                    href: null,
                     title: 'Analytics',
                     tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
                 }}
@@ -68,6 +78,7 @@ export default function VendorLayout() {
             <Tabs.Screen
                 name="earnings"
                 options={{
+                    href: null,
                     title: 'Earnings',
                     tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} />,
                 }}

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,8 @@ import {
     Image,
     Dimensions,
     Animated,
+    TextInput,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,10 +31,14 @@ import {
     Radio,
     Eye,
     ChevronRight,
+    LogOut,
 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { dashboardStats, salesData, recentOrders, products, liveChat, currentVendor } from '@/mocks/data';
+import { dashboardStats as mockStats, salesData as mockSales, recentOrders as mockOrders, products as mockProducts, liveChat as mockChat, currentVendor } from '@/mocks/data';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -96,7 +102,7 @@ function StatCard({ title, value, change, icon: Icon, isHighlight }: {
 }
 
 function SalesChart() {
-    const maxAmount = Math.max(...salesData.map(d => d.amount));
+    const maxAmount = Math.max(...mockSales.map(d => d.amount));
 
     return (
         <View style={styles.chartContainer}>
@@ -129,7 +135,7 @@ function SalesChart() {
                     <Text style={styles.chartYLabel}>रू0k</Text>
                 </View>
                 <View style={styles.chartBars}>
-                    {salesData.map((data, index) => (
+                    {mockSales.map((data, index) => (
                         <View key={index} style={styles.chartBarContainer}>
                             <View style={styles.chartBarWrapper}>
                                 <View
@@ -149,16 +155,95 @@ function SalesChart() {
 }
 
 function LiveSessionPanel() {
+    const { user } = useAuth();
+    const [activeSession, setActiveSession] = useState<any>(null);
+    const [messages, setMessages] = useState<any[]>([]);
+    const [newMessage, setNewMessage] = useState('');
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, { toValue: 1.3, duration: 800, useNativeDriver: true }),
-                Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
             ])
         ).start();
+
+        fetchActiveSession();
     }, []);
+
+    const fetchActiveSession = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('live_sessions')
+                .select('*')
+                .eq('vendor_id', user?.id)
+                .eq('is_live', true)
+                .single();
+
+            if (data) {
+                setActiveSession(data);
+                fetchMessages(data.id);
+                subscribeToMessages(data.id);
+            }
+        } catch (error) {
+            // No active session
+        }
+    };
+
+    const fetchMessages = async (sessionId: string) => {
+        const { data } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('session_id', sessionId)
+            .order('created_at', { ascending: true });
+        if (data) setMessages(data);
+    };
+
+    const subscribeToMessages = (sessionId: string) => {
+        const channel = supabase
+            .channel(`session-${sessionId}`)
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'messages', filter: `session_id=eq.${sessionId}` },
+                (payload) => {
+                    setMessages((current) => [...current, payload.new]);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    };
+
+    const sendMessage = async () => {
+        if (!newMessage.trim() || !activeSession || !user) return;
+
+        try {
+            const { error } = await supabase.from('messages').insert([
+                {
+                    session_id: activeSession.id,
+                    sender_id: user.id,
+                    sender_name: user.name || 'Vendor',
+                    message: newMessage,
+                }
+            ]);
+            if (error) throw error;
+            setNewMessage('');
+        } catch (error: any) {
+            console.error('Send error:', error.message);
+        }
+    };
+
+    if (!activeSession) {
+        return (
+            <View style={styles.livePanelEmpty}>
+                <Radio size={40} color={colors.textSecondary} />
+                <Text style={styles.livePanelEmptyText}>Start a live session to engage with consumers!</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.livePanel}>
@@ -207,20 +292,42 @@ function LiveSessionPanel() {
                 </View>
 
                 <View style={styles.chatSection}>
-                    <Text style={styles.chatTitle}>Recent chat</Text>
-                    {liveChat.map(message => (
-                        <View key={message.id} style={styles.chatMessage}>
-                            <Text style={styles.chatUser}>{message.userName}:</Text>
-                            <Text style={styles.chatText}>{message.message}</Text>
-                        </View>
-                    ))}
+                    <Text style={styles.chatTitle}>Live Chat</Text>
+                    <ScrollView
+                        style={styles.messagesList}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 8 }}
+                    >
+                        {messages.length === 0 ? (
+                            <Text style={styles.noChatText}>No messages yet</Text>
+                        ) : (
+                            messages.map(message => (
+                                <View key={message.id} style={styles.chatMessage}>
+                                    <Text style={styles.chatUser}>{message.sender_name}:</Text>
+                                    <Text style={styles.chatText}>{message.message}</Text>
+                                </View>
+                            ))
+                        )}
+                    </ScrollView>
+                    <View style={styles.chatInputRow}>
+                        <TextInput
+                            style={styles.chatInput}
+                            placeholder="Type a message..."
+                            value={newMessage}
+                            onChangeText={setNewMessage}
+                            onSubmitEditing={sendMessage}
+                        />
+                        <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
+                            <Text style={styles.sendButtonText}>Send</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         </View>
     );
 }
 
-function OrderItem({ order }: { order: typeof recentOrders[0] }) {
+function OrderItem({ order }: { order: any }) {
     const statusColors: Record<string, { bg: string; text: string }> = {
         processing: { bg: '#FEF3C7', text: '#D97706' },
         shipped: { bg: '#D1FAE5', text: '#059669' },
@@ -232,10 +339,12 @@ function OrderItem({ order }: { order: typeof recentOrders[0] }) {
 
     return (
         <View style={styles.orderItem}>
-            <Image source={{ uri: order.items[0].productImage }} style={styles.orderImage} />
+            {order.items?.[0]?.productImage && (
+                <Image source={{ uri: order.items[0].productImage }} style={styles.orderImage} />
+            )}
             <View style={styles.orderInfo}>
                 <View style={styles.orderHeader}>
-                    <Text style={styles.orderId}>#{order.id}</Text>
+                    <Text style={styles.orderId}>#{order.id.slice(0, 8)}</Text>
                     <View style={[styles.orderStatus, { backgroundColor: status.bg }]}>
                         <Text style={[styles.orderStatusText, { color: status.text }]}>
                             {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
@@ -243,13 +352,13 @@ function OrderItem({ order }: { order: typeof recentOrders[0] }) {
                     </View>
                 </View>
                 <Text style={styles.orderProducts} numberOfLines={1}>
-                    {order.items.map(i => i.productName).join(', ')}
+                    {order.items?.map((i: any) => i.productName).join(', ') || 'No items'}
                 </Text>
                 <Text style={styles.orderCustomer}>{order.customerName} • {order.customerLocation}</Text>
             </View>
             <View style={styles.orderRight}>
-                <Text style={styles.orderAmount}>रू{order.totalAmount.toLocaleString()}</Text>
-                <Text style={styles.orderItems}>{order.items.length} item{order.items.length > 1 ? 's' : ''}</Text>
+                <Text style={styles.orderAmount}>रू{order.total_amount?.toLocaleString() || order.totalAmount?.toLocaleString()}</Text>
+                <Text style={styles.orderItems}>{order.items?.length || 0} item{(order.items?.length || 0) > 1 ? 's' : ''}</Text>
                 <TouchableOpacity>
                     <MoreVertical size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
@@ -258,7 +367,7 @@ function OrderItem({ order }: { order: typeof recentOrders[0] }) {
     );
 }
 
-function TopProductItem({ product, rank }: { product: typeof products[0]; rank: number }) {
+function TopProductItem({ product, rank }: { product: any; rank: number }) {
     const rankColors = ['#EAB308', '#9CA3AF', '#CD7F32', colors.text];
 
     return (
@@ -266,16 +375,18 @@ function TopProductItem({ product, rank }: { product: typeof products[0]; rank: 
             <View style={[styles.rankBadge, { backgroundColor: rankColors[rank - 1] || colors.text }]}>
                 <Text style={styles.rankText}>{rank}</Text>
             </View>
-            <Image source={{ uri: product.images[0] }} style={styles.topProductImage} />
+            {product.images?.[0] && (
+                <Image source={{ uri: product.images[0] }} style={styles.topProductImage} />
+            )}
             <View style={styles.topProductInfo}>
                 <Text style={styles.topProductName} numberOfLines={1}>{product.name}</Text>
                 <View style={styles.topProductMeta}>
                     <Star size={12} color={colors.secondary} fill={colors.secondary} />
-                    <Text style={styles.topProductRating}>{product.rating}</Text>
-                    <Text style={styles.topProductReviews}>• {product.totalReviews} reviews</Text>
+                    <Text style={styles.topProductRating}>{product.rating || '0.0'}</Text>
+                    <Text style={styles.topProductReviews}>• {product.total_reviews || product.totalReviews || 0} reviews</Text>
                 </View>
                 <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${(product.rating / 5) * 100}%` }]} />
+                    <View style={[styles.progressFill, { width: `${((product.rating || 0) / 5) * 100}%` }]} />
                 </View>
             </View>
             <Text style={styles.topProductPrice}>रू{product.price.toLocaleString()}</Text>
@@ -285,6 +396,63 @@ function TopProductItem({ product, rank }: { product: typeof products[0]; rank: 
 
 export default function VendorDashboardScreen() {
     const { t } = useLanguage();
+    const { logout, user, isAuthenticated, isLoading: authLoading } = useAuth();
+    const router = useRouter();
+
+    const [stats, setStats] = useState<any>(null);
+    const [recentOrders, setRecentOrders] = useState<any[]>([]);
+    const [topProducts, setTopProducts] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) {
+            router.replace('/');
+            return;
+        }
+        if (user) {
+            fetchDashboardData();
+        }
+    }, [user, isAuthenticated, authLoading]);
+
+    const fetchDashboardData = async () => {
+        try {
+            setIsLoading(true);
+            // 1. Fetch Orders
+            const { data: orders } = await supabase
+                .from('orders')
+                .select('*, items')
+                .eq('vendor_id', user?.id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+            setRecentOrders(orders || []);
+
+            // 2. Fetch Products
+            const { data: products } = await supabase
+                .from('products')
+                .select('*')
+                .eq('vendor_id', user?.id)
+                .order('rating', { ascending: false })
+                .limit(4);
+            setTopProducts(products || []);
+
+            // 3. Simple Stats (mocking growth for visual appeal but using real counts)
+            setStats({
+                todayRevenue: orders ? orders.reduce((acc, o) => acc + (o.total_amount || 0), 0) : 0,
+                totalOrders: orders ? orders.length : 0,
+                activeProducts: products ? products.length : 0,
+            });
+
+        } catch (error) {
+            console.error('Dashboard fetch error:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        await logout();
+        router.replace('/');
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -314,68 +482,22 @@ export default function VendorDashboardScreen() {
                         <Bell size={20} color={colors.text} />
                         <View style={styles.badge}><Text style={styles.badgeText}>3</Text></View>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.profileButton}>
+                    <TouchableOpacity
+                        style={styles.profileButton}
+                        onPress={() => router.push('/vendor/profile')}
+                    >
                         <Image source={{ uri: currentVendor.avatar }} style={styles.profileAvatar} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.iconButton, { marginLeft: 8 }]}
+                        onPress={handleLogout}
+                    >
+                        <LogOut size={20} color={colors.error} />
                     </TouchableOpacity>
                 </View>
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.welcomeSection}>
-                    <View>
-                        <Text style={styles.welcomeText}>{t('goodEvening')}, {currentVendor.name.split(' ')[0]}! 👋</Text>
-                        <Text style={styles.welcomeSubtext}>{t('storeMessage')}</Text>
-                    </View>
-                </View>
-
-                <TouchableOpacity style={styles.festivalBanner}>
-                    <LinearGradient
-                        colors={['#FEF3C7', '#FDE68A']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.festivalGradient}
-                    >
-                        <View style={styles.festivalIcon}>
-                            <Calendar size={20} color={colors.secondary} />
-                        </View>
-                        <View style={styles.festivalInfo}>
-                            <Text style={styles.festivalTitle}>{t('upcomingFestival')} 🎉</Text>
-                            <Text style={styles.festivalText}>{t('festivalMessage')}</Text>
-                        </View>
-                        <TouchableOpacity style={styles.prepareButton}>
-                            <Text style={styles.prepareButtonText}>{t('prepareStore')}</Text>
-                        </TouchableOpacity>
-                    </LinearGradient>
-                </TouchableOpacity>
-
-                <View style={styles.statsGrid}>
-                    <StatCard
-                        title={t('todayRevenue')}
-                        value={`रू${dashboardStats.todayRevenue.toLocaleString()}`}
-                        change={dashboardStats.revenueChange}
-                        icon={IndianRupee}
-                    />
-                    <StatCard
-                        title={t('totalOrders')}
-                        value={dashboardStats.totalOrders.toString()}
-                        change={dashboardStats.ordersChange}
-                        icon={ShoppingCart}
-                    />
-                    <StatCard
-                        title={t('activeProducts')}
-                        value={dashboardStats.activeProducts.toString()}
-                        change={dashboardStats.productsChange}
-                        icon={Package}
-                    />
-                    <StatCard
-                        title={t('storeVisitors')}
-                        value={dashboardStats.storeVisitors.toLocaleString()}
-                        change={dashboardStats.visitorsChange}
-                        icon={Users}
-                        isHighlight
-                    />
-                </View>
-
                 <View style={styles.mainContent}>
                     <View style={styles.leftColumn}>
                         <SalesChart />
@@ -390,9 +512,15 @@ export default function VendorDashboardScreen() {
                                     <Text style={styles.viewAllText}>{t('viewAll')}</Text>
                                 </TouchableOpacity>
                             </View>
-                            {recentOrders.map(order => (
-                                <OrderItem key={order.id} order={order} />
-                            ))}
+                            {isLoading ? (
+                                <ActivityIndicator color={colors.primary} />
+                            ) : recentOrders.length === 0 ? (
+                                <Text style={styles.emptyText}>No recent orders</Text>
+                            ) : (
+                                recentOrders.map(order => (
+                                    <OrderItem key={order.id} order={order} />
+                                ))
+                            )}
                         </View>
                     </View>
 
@@ -409,9 +537,15 @@ export default function VendorDashboardScreen() {
                                     <TrendingUp size={16} color={colors.primary} />
                                 </TouchableOpacity>
                             </View>
-                            {products.slice(0, 4).map((product, index) => (
-                                <TopProductItem key={product.id} product={product} rank={index + 1} />
-                            ))}
+                            {isLoading ? (
+                                <ActivityIndicator color={colors.primary} />
+                            ) : topProducts.length === 0 ? (
+                                <Text style={styles.emptyText}>No products listed</Text>
+                            ) : (
+                                topProducts.map((product, index) => (
+                                    <TopProductItem key={product.id} product={product} rank={index + 1} />
+                                ))
+                            )}
                         </View>
                     </View>
                 </View>
@@ -833,6 +967,66 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.text,
         marginBottom: 2,
+    },
+    livePanelEmpty: {
+        backgroundColor: colors.white,
+        borderRadius: 12,
+        padding: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
+        borderStyle: 'dashed',
+    },
+    livePanelEmptyText: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    messagesList: {
+        maxHeight: 150,
+        marginBottom: 12,
+    },
+    noChatText: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        fontStyle: 'italic',
+        marginTop: 10,
+    },
+    chatInputRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    chatInput: {
+        flex: 1,
+        backgroundColor: colors.white,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        fontSize: 13,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
+    },
+    sendButton: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: 16,
+        justifyContent: 'center',
+        borderRadius: 8,
+    },
+    sendButtonText: {
+        color: colors.white,
+        fontSize: 13,
+        fontWeight: '600' as const,
+    },
+    emptyText: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        paddingVertical: 20,
     },
     orderCustomer: {
         fontSize: 11,

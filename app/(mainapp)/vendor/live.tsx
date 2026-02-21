@@ -1,4 +1,3 @@
-import React from 'react';
 import {
     View,
     Text,
@@ -6,12 +5,18 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
+    Modal,
+    TextInput,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Radio, Play, Calendar, Users, Clock, Plus, Video } from 'lucide-react-native';
+import { Radio, Play, Calendar, Users, Clock, Plus, Video, X, Square } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { liveSessions } from '@/mocks/data';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from 'react';
 
 const scheduledSessions = [
     { id: 's1', title: 'Festival Special Collection', date: '2024-01-25', time: '14:00', products: 12 },
@@ -19,6 +24,113 @@ const scheduledSessions = [
 ];
 
 export default function VendorLiveScreen() {
+    const { user } = useAuth();
+    const [pastSessions, setPastSessions] = useState<any[]>([]);
+    const [activeSession, setActiveSession] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // UI State
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [isStarting, setIsStarting] = useState(false);
+    const [sessionTitle, setSessionTitle] = useState('');
+
+    useEffect(() => {
+        if (user) {
+            fetchSessions();
+            checkActiveSession();
+        }
+    }, [user]);
+
+    const fetchSessions = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('live_sessions')
+                .select('*')
+                .eq('vendor_id', user?.id)
+                .eq('is_live', false)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setPastSessions(data || []);
+        } catch (error) {
+            console.error('Error fetching past sessions:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const checkActiveSession = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('live_sessions')
+                .select('*')
+                .eq('vendor_id', user?.id)
+                .eq('is_live', true)
+                .single();
+
+            if (data) setActiveSession(data);
+        } catch (error) {
+            // No active session found is normal
+        }
+    };
+
+    const startSession = async () => {
+        if (!sessionTitle.trim()) {
+            Alert.alert('Error', 'Please enter a session title');
+            return;
+        }
+
+        try {
+            setIsStarting(true);
+            const { data, error } = await supabase
+                .from('live_sessions')
+                .insert([
+                    {
+                        vendor_id: user?.id,
+                        title: sessionTitle,
+                        is_live: true,
+                        started_at: new Date().toISOString(),
+                    }
+                ])
+                .select()
+                .single();
+
+            if (error) throw error;
+            setActiveSession(data);
+            setIsModalVisible(false);
+            setSessionTitle('');
+        } catch (error: any) {
+            Alert.alert('Error', error.message);
+        } finally {
+            setIsStarting(false);
+        }
+    };
+
+    const stopSession = async () => {
+        if (!activeSession) return;
+
+        try {
+            const startTime = new Date(activeSession.started_at);
+            const endTime = new Date();
+            const durationArr = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+
+            const { error } = await supabase
+                .from('live_sessions')
+                .update({
+                    is_live: false,
+                    ended_at: endTime.toISOString(),
+                    duration: durationArr,
+                })
+                .eq('id', activeSession.id);
+
+            if (error) throw error;
+            setActiveSession(null);
+            fetchSessions();
+            Alert.alert('Success', 'Live session ended.');
+        } catch (error: any) {
+            Alert.alert('Error', error.message);
+        }
+    };
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
@@ -30,22 +142,42 @@ export default function VendorLiveScreen() {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <TouchableOpacity style={styles.goLiveCard}>
-                    <LinearGradient
-                        colors={['#B91C1C', '#DC2626']}
-                        style={styles.goLiveGradient}
-                    >
-                        <View style={styles.goLiveIcon}>
-                            <Radio size={32} color={colors.white} />
-                        </View>
-                        <Text style={styles.goLiveTitle}>Go Live Now</Text>
-                        <Text style={styles.goLiveText}>Start streaming to your customers</Text>
-                        <View style={styles.goLiveButton}>
-                            <Play size={18} color={colors.primary} fill={colors.primary} />
-                            <Text style={styles.goLiveButtonText}>Start Live Session</Text>
-                        </View>
-                    </LinearGradient>
-                </TouchableOpacity>
+                {activeSession ? (
+                    <View style={styles.activeSessionCard}>
+                        <LinearGradient
+                            colors={['#10B981', '#059669']}
+                            style={styles.goLiveGradient}
+                        >
+                            <View style={styles.liveIndicatorRow}>
+                                <View style={styles.liveDot} />
+                                <Text style={styles.liveLabelText}>ACTIVE NOW</Text>
+                            </View>
+                            <Text style={styles.goLiveTitle}>{activeSession.title}</Text>
+                            <Text style={styles.goLiveText}>You are currently streaming live</Text>
+                            <TouchableOpacity style={styles.stopButton} onPress={stopSession}>
+                                <Square size={18} color={colors.error} fill={colors.error} />
+                                <Text style={styles.stopButtonText}>End Session</Text>
+                            </TouchableOpacity>
+                        </LinearGradient>
+                    </View>
+                ) : (
+                    <TouchableOpacity style={styles.goLiveCard} onPress={() => setIsModalVisible(true)}>
+                        <LinearGradient
+                            colors={['#B91C1C', '#DC2626']}
+                            style={styles.goLiveGradient}
+                        >
+                            <View style={styles.goLiveIcon}>
+                                <Radio size={32} color={colors.white} />
+                            </View>
+                            <Text style={styles.goLiveTitle}>Go Live Now</Text>
+                            <Text style={styles.goLiveText}>Start streaming to your customers</Text>
+                            <View style={styles.goLiveButton}>
+                                <Play size={18} color={colors.primary} fill={colors.primary} />
+                                <Text style={styles.goLiveButtonText}>Start Live Session</Text>
+                            </View>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                )}
 
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
@@ -80,31 +212,71 @@ export default function VendorLiveScreen() {
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Past Sessions</Text>
                     </View>
-                    {liveSessions.map(session => (
-                        <View key={session.id} style={styles.pastSessionCard}>
-                            <Image source={{ uri: session.thumbnail }} style={styles.pastThumbnail} />
-                            <View style={styles.pastInfo}>
-                                <Text style={styles.pastTitle} numberOfLines={1}>{session.title}</Text>
-                                <View style={styles.pastMeta}>
-                                    <Users size={12} color={colors.textSecondary} />
-                                    <Text style={styles.pastMetaText}>{session.viewerCount} viewers</Text>
-                                    <Clock size={12} color={colors.textSecondary} />
-                                    <Text style={styles.pastMetaText}>{session.duration}min</Text>
-                                </View>
-                                <View style={styles.pastStats}>
-                                    <View style={styles.pastStatItem}>
-                                        <Text style={styles.pastStatValue}>12</Text>
-                                        <Text style={styles.pastStatLabel}>Orders</Text>
-                                    </View>
-                                    <View style={styles.pastStatItem}>
-                                        <Text style={styles.pastStatValue}>रू24.5k</Text>
-                                        <Text style={styles.pastStatLabel}>Revenue</Text>
+                    {isLoading ? (
+                        <ActivityIndicator color={colors.primary} />
+                    ) : pastSessions.length === 0 ? (
+                        <Text style={styles.emptyText}>No past sessions found.</Text>
+                    ) : (
+                        pastSessions.map(session => (
+                            <View key={session.id} style={styles.pastSessionCard}>
+                                <Image
+                                    source={{ uri: session.thumbnail_url || 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400' }}
+                                    style={styles.pastThumbnail}
+                                />
+                                <View style={styles.pastInfo}>
+                                    <Text style={styles.pastTitle} numberOfLines={1}>{session.title}</Text>
+                                    <View style={styles.pastMeta}>
+                                        <Users size={12} color={colors.textSecondary} />
+                                        <Text style={styles.pastMetaText}>{session.viewer_count || 0} viewers</Text>
+                                        <Clock size={12} color={colors.textSecondary} />
+                                        <Text style={styles.pastMetaText}>{session.duration || 0}min</Text>
                                     </View>
                                 </View>
                             </View>
-                        </View>
-                    ))}
+                        ))
+                    )}
                 </View>
+
+                {/* Start Session Modal */}
+                <Modal
+                    visible={isModalVisible}
+                    animationType="fade"
+                    transparent={true}
+                    onRequestClose={() => setIsModalVisible(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>New Live Session</Text>
+                                <TouchableOpacity onPress={() => setIsModalVisible(false)} disabled={isStarting}>
+                                    <X size={24} color={colors.text} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={styles.inputLabel}>Session Title</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="What will you talk about?"
+                                value={sessionTitle}
+                                onChangeText={setSessionTitle}
+                                maxLength={100}
+                                editable={!isStarting}
+                            />
+
+                            <TouchableOpacity
+                                style={[styles.submitButton, isStarting && styles.submitButtonDisabled]}
+                                onPress={startSession}
+                                disabled={isStarting}
+                            >
+                                {isStarting ? (
+                                    <ActivityIndicator color={colors.white} />
+                                ) : (
+                                    <Text style={styles.submitButtonText}>Start Streaming</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
 
                 <View style={styles.tipsCard}>
                     <Text style={styles.tipsTitle}>💡 Live Streaming Tips</Text>
@@ -331,5 +503,105 @@ const styles = StyleSheet.create({
     },
     bottomPadding: {
         height: 20,
+    },
+    // Active Session Styles
+    activeSessionCard: {
+        borderRadius: 16,
+        overflow: 'hidden',
+        marginBottom: 20,
+    },
+    liveIndicatorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 8,
+        marginBottom: 16,
+    },
+    liveDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#FF0000',
+    },
+    liveLabelText: {
+        color: colors.white,
+        fontSize: 12,
+        fontWeight: '700' as const,
+    },
+    stopButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.white,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+    },
+    stopButtonText: {
+        fontSize: 15,
+        fontWeight: '600' as const,
+        color: colors.error,
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: colors.white,
+        borderRadius: 20,
+        padding: 24,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700' as const,
+        color: colors.text,
+    },
+    inputLabel: {
+        fontSize: 14,
+        color: colors.text,
+        fontWeight: '600' as const,
+        marginBottom: 8,
+    },
+    input: {
+        backgroundColor: colors.background,
+        borderRadius: 10,
+        padding: 12,
+        fontSize: 16,
+        borderColor: colors.borderLight,
+        borderWidth: 1,
+        marginBottom: 20,
+    },
+    submitButton: {
+        backgroundColor: colors.primary,
+        borderRadius: 12,
+        height: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    submitButtonDisabled: {
+        opacity: 0.6,
+    },
+    submitButtonText: {
+        color: colors.white,
+        fontSize: 16,
+        fontWeight: '600' as const,
+    },
+    emptyText: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginTop: 20,
     },
 });

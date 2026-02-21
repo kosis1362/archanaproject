@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Image,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,20 +26,69 @@ import {
     Store,
 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { products } from '@/mocks/data';
+import { products as mockProducts } from '@/mocks/data';
 import { useCart } from '@/contexts/CartContext';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { addToCart } = useCart();
+
+    // State
+    const [product, setProduct] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const [quantity, setQuantity] = useState(1);
     const [isWishlisted, setIsWishlisted] = useState(false);
 
-    const product = products.find(p => p.id === id) || products[0];
-    const discount = product.originalPrice
-        ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+    useEffect(() => {
+        if (id) {
+            fetchProduct();
+        }
+    }, [id]);
+
+    const fetchProduct = async () => {
+        try {
+            setIsLoading(true);
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+            setProduct(data);
+        } catch (error) {
+            console.error('Error fetching product:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+        );
+    }
+
+    if (!product) {
+        return (
+            <View style={styles.errorContainer}>
+                <Text>Product not found</Text>
+                <TouchableOpacity onPress={() => router.back()}>
+                    <Text style={{ color: colors.primary, marginTop: 10 }}>Go Back</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    const price = product.price || 0;
+    const originalPrice = product.original_price || product.originalPrice;
+    const discount = originalPrice
+        ? Math.round(((originalPrice - price) / originalPrice) * 100)
         : 0;
 
     const handleAddToCart = () => {
@@ -81,7 +131,7 @@ export default function ProductDetailScreen() {
                 <View style={styles.content}>
                     <View style={styles.vendorRow}>
                         <Store size={14} color={colors.primary} />
-                        <Text style={styles.vendorName}>{product.vendorName}</Text>
+                        <Text style={styles.vendorName}>{product.vendor_name || product.vendorName || 'Vendor'}</Text>
                     </View>
 
                     <Text style={styles.productName}>{product.name}</Text>
@@ -89,16 +139,16 @@ export default function ProductDetailScreen() {
                     <View style={styles.ratingRow}>
                         <View style={styles.ratingContainer}>
                             <Star size={16} color={colors.secondary} fill={colors.secondary} />
-                            <Text style={styles.rating}>{product.rating}</Text>
-                            <Text style={styles.reviews}>({product.totalReviews} reviews)</Text>
+                            <Text style={styles.rating}>{product.rating || '0.0'}</Text>
+                            <Text style={styles.reviews}>({product.total_reviews || product.totalReviews || 0} reviews)</Text>
                         </View>
                         <Text style={styles.stock}>{product.stock} in stock</Text>
                     </View>
 
                     <View style={styles.priceRow}>
-                        <Text style={styles.price}>रू{product.price.toLocaleString()}</Text>
-                        {product.originalPrice && (
-                            <Text style={styles.originalPrice}>रू{product.originalPrice.toLocaleString()}</Text>
+                        <Text style={styles.price}>रू{price.toLocaleString()}</Text>
+                        {originalPrice && (
+                            <Text style={styles.originalPrice}>रू{originalPrice.toLocaleString()}</Text>
                         )}
                     </View>
 
@@ -148,7 +198,7 @@ export default function ProductDetailScreen() {
                             </TouchableOpacity>
                         </View>
                         <Text style={styles.totalPrice}>
-                            Total: रू{(product.price * quantity).toLocaleString()}
+                            Total: रू{(price * quantity).toLocaleString()}
                         </Text>
                     </View>
                 </View>
@@ -410,5 +460,15 @@ const styles = StyleSheet.create({
     },
     bottomPadding: {
         height: 100,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

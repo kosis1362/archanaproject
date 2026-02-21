@@ -66,6 +66,15 @@ const errorStyles = StyleSheet.create({
 });
 
 export default function RootLayout() {
+    React.useEffect(() => {
+        if (typeof window !== 'undefined' && 'addEventListener' in window) {
+            const handler = (ev: PromiseRejectionEvent) => {
+                console.error('Unhandled promise rejection (browser):', ev.reason);
+            };
+            window.addEventListener('unhandledrejection', handler as any);
+            return () => window.removeEventListener('unhandledrejection', handler as any);
+        }
+    }, []);
     return (
         <ErrorBoundary>
             <QueryClientProvider client={queryClient}>

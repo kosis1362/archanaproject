@@ -20,7 +20,9 @@ import {
     LogOut,
     ChevronRight,
     Globe,
+    Camera,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -47,6 +49,28 @@ export default function ProfileScreen() {
         setLanguage(language === 'en' ? 'ne' : 'en');
     };
 
+    const pickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            alert('Sorry, we need camera roll permissions to make this work!');
+            return;
+        }
+
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 1,
+        });
+
+        if (!result.canceled) {
+            // In a real app, you would upload this to Supabase storage
+            // For now, we'll just demonstrate it works
+            console.log('Image picked:', result.assets[0].uri);
+            alert('Photo selected! (Upload logic would go here)');
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
@@ -63,6 +87,9 @@ export default function ProfileScreen() {
                                 <User size={40} color={colors.white} />
                             </View>
                         )}
+                        <TouchableOpacity style={styles.cameraButton} onPress={pickImage}>
+                            <Camera size={16} color={colors.white} />
+                        </TouchableOpacity>
                     </View>
                     <View style={styles.profileInfo}>
                         <Text style={styles.userName}>{user?.name || 'Guest User'}</Text>
@@ -157,6 +184,20 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
+        position: 'relative',
+    },
+    cameraButton: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: colors.primary,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: colors.white,
     },
     profileInfo: {
         flex: 1,

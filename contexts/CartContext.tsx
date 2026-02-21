@@ -4,10 +4,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface CartContextType {
     items: CartItem[];
-    addToCart: (product: Product) => void;
+    addToCart: (product: Product, quantity?: number) => void;
+    updateQuantity: (productId: string, quantity: number) => void;
     removeFromCart: (productId: string) => void;
     clearCart: () => void;
-    total: number;
+    totalAmount: number;
+    totalItems: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -42,18 +44,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const addToCart = (product: Product) => {
+    const addToCart = (product: Product, quantity: number = 1) => {
         setItems((prevItems) => {
             const existingItem = prevItems.find((item) => item.product.id === product.id);
             if (existingItem) {
                 return prevItems.map((item) =>
                     item.product.id === product.id
-                        ? { ...item, quantity: item.quantity + 1 }
+                        ? { ...item, quantity: item.quantity + quantity }
                         : item
                 );
             }
-            return [...prevItems, { product, quantity: 1 }];
+            return [...prevItems, { id: product.id, product, quantity }];
         });
+    };
+
+    const updateQuantity = (productId: string, quantity: number) => {
+        setItems((prevItems) => prevItems.map(item =>
+            item.product.id === productId ? { ...item, quantity: Math.max(0, quantity) } : item
+        ));
     };
 
     const removeFromCart = (productId: string) => {
@@ -64,10 +72,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setItems([]);
     };
 
-    const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    const totalAmount = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
     return (
-        <CartContext.Provider value={{ items, addToCart, removeFromCart, clearCart, total }}>
+        <CartContext.Provider value={{ items, addToCart, updateQuantity, removeFromCart, clearCart, totalAmount, totalItems }}>
             {children}
         </CartContext.Provider>
     );

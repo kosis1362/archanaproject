@@ -8,68 +8,86 @@ import {
     Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TrendingUp, TrendingDown, Users, Eye, ShoppingCart, Star } from 'lucide-react-native';
+import { TrendingUp, TrendingDown, Users, Eye, ShoppingCart, Star, PieChart as PieIcon, BarChart } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { salesData } from '@/mocks/data';
+import { salesData, products } from '@/mocks/data';
 
 const { width } = Dimensions.get('window');
 
 const timeFilters = ['Today', 'Week', 'Month', 'Year'];
 
-const analyticsData = {
-    pageViews: { value: 12450, change: 18.7 },
-    uniqueVisitors: { value: 8234, change: 12.3 },
-    conversionRate: { value: 3.2, change: -0.5 },
-    avgOrderValue: { value: 2450, change: 8.4 },
-    productViews: [
-        { name: 'Kundan Necklace', views: 1234 },
-        { name: 'Pottery Vase', views: 987 },
-        { name: 'Pashmina Shawl', views: 856 },
-        { name: 'Brass Diya Set', views: 743 },
+// Simulation of data for different time periods
+const salesPeriodData = {
+    'Today': [
+        { label: '8am', value: 2400 },
+        { label: '11am', value: 4500 },
+        { label: '2pm', value: 3800 },
+        { label: '5pm', value: 5200 },
+        { label: '8pm', value: 6100 },
     ],
-    trafficSources: [
-        { source: 'Direct', percentage: 45 },
-        { source: 'Search', percentage: 28 },
-        { source: 'Social', percentage: 18 },
-        { source: 'Referral', percentage: 9 },
+    'Week': salesData.map(d => ({ label: d.day, value: d.amount })),
+    'Month': [
+        { label: 'W1', value: 24000 },
+        { label: 'W2', value: 18000 },
+        { label: 'W3', value: 32000 },
+        { label: 'W4', value: 28000 },
     ],
+    'Year': [
+        { label: 'Q1', value: 120000 },
+        { label: 'Q2', value: 150000 },
+        { label: 'Q3', value: 110000 },
+        { label: 'Q4', value: 180000 },
+    ]
 };
 
-function MetricCard({ title, value, change, icon: Icon, suffix }: {
-    title: string;
-    value: string | number;
-    change: number;
-    icon: any;
-    suffix?: string;
-}) {
-    const isPositive = change >= 0;
+const topProductShare = products.slice(0, 5).map((p, i) => ({
+    name: p.name,
+    share: [35, 25, 20, 15, 5][i],
+    color: ['#B91C1C', '#EA580C', '#F59E0B', '#FCD34D', '#FEF3C7'][i]
+}));
 
+function PieChart() {
     return (
-        <View style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-                <View style={styles.metricIconContainer}>
-                    <Icon size={18} color={colors.primary} />
+        <View style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+                <PieIcon size={20} color={colors.primary} />
+                <Text style={styles.chartTitle}>Product Sales Distribution</Text>
+            </View>
+            <View style={styles.pieContainer}>
+                <View style={styles.pieMock}>
+                    {/* Visual representation of segments */}
+                    {topProductShare.map((item, index) => (
+                        <View
+                            key={index}
+                            style={[
+                                styles.pieSegment,
+                                {
+                                    width: `${item.share}%`,
+                                    backgroundColor: item.color,
+                                    height: 30 + (index * 5) // Slightly varying heights for visual interest
+                                }
+                            ]}
+                        />
+                    ))}
                 </View>
-                <View style={styles.changeContainer}>
-                    {isPositive ? (
-                        <TrendingUp size={14} color={colors.success} />
-                    ) : (
-                        <TrendingDown size={14} color={colors.error} />
-                    )}
-                    <Text style={[styles.changeText, { color: isPositive ? colors.success : colors.error }]}>
-                        {isPositive ? '+' : ''}{change}%
-                    </Text>
+                <View style={styles.legendContainer}>
+                    {topProductShare.map((item, index) => (
+                        <View key={index} style={styles.legendItem}>
+                            <View style={[styles.legendColor, { backgroundColor: item.color }]} />
+                            <Text style={styles.legendText} numberOfLines={1}>{item.name}</Text>
+                            <Text style={styles.legendPercentage}>{item.share}%</Text>
+                        </View>
+                    ))}
                 </View>
             </View>
-            <Text style={styles.metricValue}>{value}{suffix}</Text>
-            <Text style={styles.metricTitle}>{title}</Text>
         </View>
     );
 }
 
 export default function VendorAnalyticsScreen() {
     const [activeFilter, setActiveFilter] = useState('Week');
-    const maxSales = Math.max(...salesData.map(d => d.amount));
+    const currentData = salesPeriodData[activeFilter as keyof typeof salesPeriodData];
+    const maxValue = Math.max(...currentData.map(d => d.value));
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -92,92 +110,29 @@ export default function VendorAnalyticsScreen() {
             </ScrollView>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.metricsGrid}>
-                    <MetricCard
-                        title="Page Views"
-                        value={analyticsData.pageViews.value.toLocaleString()}
-                        change={analyticsData.pageViews.change}
-                        icon={Eye}
-                    />
-                    <MetricCard
-                        title="Unique Visitors"
-                        value={analyticsData.uniqueVisitors.value.toLocaleString()}
-                        change={analyticsData.uniqueVisitors.change}
-                        icon={Users}
-                    />
-                    <MetricCard
-                        title="Conversion Rate"
-                        value={analyticsData.conversionRate.value}
-                        change={analyticsData.conversionRate.change}
-                        icon={ShoppingCart}
-                        suffix="%"
-                    />
-                    <MetricCard
-                        title="Avg Order Value"
-                        value={`रू${analyticsData.avgOrderValue.value.toLocaleString()}`}
-                        change={analyticsData.avgOrderValue.change}
-                        icon={Star}
-                    />
-                </View>
-
                 <View style={styles.chartCard}>
-                    <Text style={styles.chartTitle}>Sales Trend</Text>
-                    <View style={styles.chartContainer}>
-                        {salesData.map((data, index) => (
+                    <View style={styles.chartHeader}>
+                        <BarChart size={20} color={colors.primary} />
+                        <Text style={styles.chartTitle}>{activeFilter} Sales Overview</Text>
+                    </View>
+                    <View style={styles.unifiedChartContainer}>
+                        {currentData.map((data, index) => (
                             <View key={index} style={styles.barContainer}>
                                 <View style={styles.barWrapper}>
                                     <View
                                         style={[
                                             styles.bar,
-                                            { height: `${(data.amount / maxSales) * 100}%` },
+                                            { height: `${(data.value / maxValue) * 100}%` },
                                         ]}
                                     />
                                 </View>
-                                <Text style={styles.barLabel}>{data.day}</Text>
+                                <Text style={styles.barLabel}>{data.label}</Text>
                             </View>
                         ))}
                     </View>
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Top Viewed Products</Text>
-                    {analyticsData.productViews.map((product, index) => (
-                        <View key={index} style={styles.productViewItem}>
-                            <Text style={styles.productRank}>{index + 1}</Text>
-                            <Text style={styles.productViewName}>{product.name}</Text>
-                            <Text style={styles.productViewCount}>{product.views.toLocaleString()} views</Text>
-                        </View>
-                    ))}
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Traffic Sources</Text>
-                    <View style={styles.trafficContainer}>
-                        {analyticsData.trafficSources.map((source, index) => (
-                            <View key={index} style={styles.trafficItem}>
-                                <View style={styles.trafficInfo}>
-                                    <View style={[styles.trafficDot, { backgroundColor: ['#B91C1C', '#F59E0B', '#10B981', '#3B82F6'][index] }]} />
-                                    <Text style={styles.trafficSource}>{source.source}</Text>
-                                </View>
-                                <Text style={styles.trafficPercentage}>{source.percentage}%</Text>
-                            </View>
-                        ))}
-                        <View style={styles.trafficBar}>
-                            {analyticsData.trafficSources.map((source, index) => (
-                                <View
-                                    key={index}
-                                    style={[
-                                        styles.trafficBarSegment,
-                                        {
-                                            width: `${source.percentage}%`,
-                                            backgroundColor: ['#B91C1C', '#F59E0B', '#10B981', '#3B82F6'][index],
-                                        },
-                                    ]}
-                                />
-                            ))}
-                        </View>
-                    </View>
-                </View>
+                <PieChart />
 
                 <View style={styles.bottomPadding} />
             </ScrollView>
@@ -205,10 +160,11 @@ const styles = StyleSheet.create({
         backgroundColor: colors.white,
         paddingHorizontal: 12,
         paddingVertical: 12,
+        maxHeight: 70,
     },
     filterButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
         marginHorizontal: 4,
         borderRadius: 20,
         backgroundColor: colors.borderLight,
@@ -217,9 +173,9 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
     },
     filterText: {
-        fontSize: 13,
+        fontSize: 14,
         color: colors.textSecondary,
-        fontWeight: '500' as const,
+        fontWeight: '600' as const,
     },
     filterTextActive: {
         color: colors.white,
@@ -228,67 +184,31 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 16,
     },
-    metricsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginHorizontal: -4,
-        marginBottom: 16,
-    },
-    metricCard: {
-        width: (width - 40) / 2,
-        backgroundColor: colors.white,
-        borderRadius: 12,
-        padding: 14,
-        margin: 4,
-    },
-    metricHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    metricIconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        backgroundColor: colors.cherryLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    changeContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-    changeText: {
-        fontSize: 11,
-        fontWeight: '600' as const,
-    },
-    metricValue: {
-        fontSize: 22,
-        fontWeight: '700' as const,
-        color: colors.text,
-    },
-    metricTitle: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
     chartCard: {
         backgroundColor: colors.white,
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 16,
+        padding: 20,
         marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 3,
+    },
+    chartHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 20,
     },
     chartTitle: {
         fontSize: 16,
-        fontWeight: '600' as const,
+        fontWeight: '700' as const,
         color: colors.text,
-        marginBottom: 16,
     },
-    chartContainer: {
+    unifiedChartContainer: {
         flexDirection: 'row',
-        height: 150,
+        height: 180,
         alignItems: 'flex-end',
         justifyContent: 'space-around',
     },
@@ -298,91 +218,63 @@ const styles = StyleSheet.create({
     },
     barWrapper: {
         height: '100%',
-        width: 24,
+        width: 30,
         justifyContent: 'flex-end',
     },
     bar: {
         width: '100%',
         backgroundColor: colors.primary,
-        borderTopLeftRadius: 4,
-        borderTopRightRadius: 4,
+        borderTopLeftRadius: 6,
+        borderTopRightRadius: 6,
     },
     barLabel: {
-        fontSize: 10,
+        fontSize: 11,
         color: colors.textSecondary,
-        marginTop: 8,
+        marginTop: 10,
+        fontWeight: '500' as const,
     },
-    section: {
-        backgroundColor: colors.white,
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
+    pieContainer: {
+        flexDirection: 'column',
     },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600' as const,
-        color: colors.text,
-        marginBottom: 12,
+    pieMock: {
+        flexDirection: 'row',
+        height: 60,
+        alignItems: 'center',
+        backgroundColor: colors.borderLight,
+        borderRadius: 30,
+        overflow: 'hidden',
+        marginBottom: 20,
+        paddingHorizontal: 2,
     },
-    productViewItem: {
+    pieSegment: {
+        height: '100%',
+        marginHorizontal: 1,
+        borderRadius: 4,
+    },
+    legendContainer: {
+        gap: 12,
+    },
+    legendItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.borderLight,
+        gap: 10,
     },
-    productRank: {
-        width: 24,
-        fontSize: 14,
-        fontWeight: '700' as const,
-        color: colors.primary,
+    legendColor: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
     },
-    productViewName: {
+    legendText: {
         flex: 1,
         fontSize: 14,
         color: colors.text,
     },
-    productViewCount: {
-        fontSize: 13,
-        color: colors.textSecondary,
-    },
-    trafficContainer: {},
-    trafficItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 8,
-    },
-    trafficInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    trafficDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-    trafficSource: {
+    legendPercentage: {
         fontSize: 14,
+        fontWeight: '700' as const,
         color: colors.text,
-    },
-    trafficPercentage: {
-        fontSize: 14,
-        fontWeight: '600' as const,
-        color: colors.text,
-    },
-    trafficBar: {
-        flexDirection: 'row',
-        height: 8,
-        borderRadius: 4,
-        overflow: 'hidden',
-        marginTop: 12,
-    },
-    trafficBarSegment: {
-        height: '100%',
     },
     bottomPadding: {
-        height: 20,
+        height: 40,
     },
 });
