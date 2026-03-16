@@ -1,4 +1,4 @@
-export type UserRole = 'customer' | 'vendor';
+export type UserRole = 'customer' | 'vendor' | 'CUSTOMER' | 'VENDOR';
 
 export interface User {
     id: string;
@@ -70,6 +70,7 @@ export interface Order {
     customerName: string;
     customerLocation: string;
     vendorId: string;
+    vendorName?: string;
     items: OrderItem[];
     status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
     totalAmount: number;
