@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { CartProvider } from '@/contexts/CartContext';
+
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { colors } from '@/constants/colors';
 import React from 'react';
@@ -80,10 +80,8 @@ export default function RootLayout() {
             <QueryClientProvider client={queryClient}>
                 <LanguageProvider>
                     <AuthProvider>
-                        <CartProvider>
-                            <StatusBar style="light" />
-                            <RootLayoutNav />
-                        </CartProvider>
+            <StatusBar style="light" />
+            <RootLayoutNav />
                     </AuthProvider>
                 </LanguageProvider>
             </QueryClientProvider>
