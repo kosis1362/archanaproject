@@ -13,6 +13,7 @@ export default function CustomerLayout() {
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="explore" />
       <Stack.Screen name="product-detail" />
+      <Stack.Screen name="customer-profile" />
     </Stack>
   );
 }

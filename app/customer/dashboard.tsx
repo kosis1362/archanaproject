@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,6 +21,7 @@ import {
   Bookmark,
   Home,
   Plus,
+  ShoppingCart,
 } from 'lucide-react-native';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -63,9 +65,24 @@ export default function CustomerDashboard() {
       >
         {/* Quick Links ─────────────────────────────────────────────────────── */}
         <View style={styles.quickLinks}>
-          <QuickLink icon={<ShoppingBag size={24} color="#2563EB" />} label="Orders" bg="#EFF6FF" />
-          <QuickLink icon={<Heart size={24} color="#EC4899" />} label="Wishlist" bg="#FDF2F8" />
-          <QuickLink icon={<User size={24} color="#7C3AED" />} label="Profile" bg="#F5F3FF" />
+          <QuickLink 
+            icon={<ShoppingBag size={24} color="#2563EB" />} 
+            label="Orders" 
+            bg="#EFF6FF" 
+            onPress={() => Alert.alert('Orders', 'Order history tracking coming soon!')}
+          />
+          <QuickLink 
+            icon={<Heart size={24} color="#EC4899" />} 
+            label="Wishlist" 
+            bg="#FDF2F8" 
+            onPress={() => Alert.alert('Wishlist', 'Your saved products will appear here soon.')}
+          />
+          <QuickLink 
+            icon={<User size={24} color="#7C3AED" />} 
+            label="Profile" 
+            bg="#F5F3FF" 
+            onPress={() => router.push('/customer/customer-profile')}
+          />
         </View>
 
         {/* Order Status ────────────────────────────────────────────────────── */}
@@ -121,10 +138,26 @@ export default function CustomerDashboard() {
 
       {/* ── Bottom Navigation ────────────────────────────────────────────────── */}
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom + 8 }]}>
-        <NavItem icon={<Home size={24} color="#2563EB" fill="#2563EB" />} label="Home" active />
-        <NavItem icon={<Search size={24} color="#9CA3AF" />} label="Search" onPress={() => router.push('/customer/explore')} />
-        <NavItem icon={<ShoppingBag size={24} color="#9CA3AF" />} label="Cart" />
-        <NavItem icon={<Bookmark size={24} color="#9CA3AF" />} label="Saved" />
+        <NavItem 
+          icon={<Home size={24} color="#2563EB" fill="#2563EB" />} 
+          label="Home" 
+          active 
+        />
+        <NavItem 
+          icon={<Search size={24} color="#9CA3AF" />} 
+          label="Search" 
+          onPress={() => router.push('/customer/explore')} 
+        />
+        <NavItem 
+          icon={<ShoppingCart size={24} color="#9CA3AF" />} 
+          label="Cart" 
+          onPress={() => Alert.alert('Shopping Cart', 'Cart functionality is currently being implemented.')}
+        />
+        <NavItem 
+          icon={<User size={24} color="#9CA3AF" />} 
+          label="Profile" 
+          onPress={() => router.push('/customer/customer-profile')} 
+        />
       </View>
     </View>
   );
@@ -132,9 +165,9 @@ export default function CustomerDashboard() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function QuickLink({ icon, label, bg }: { icon: React.ReactNode; label: string; bg: string }) {
+function QuickLink({ icon, label, bg, onPress }: { icon: React.ReactNode; label: string; bg: string; onPress?: () => void }) {
   return (
-    <TouchableOpacity style={styles.quickLinkCard} activeOpacity={0.8}>
+    <TouchableOpacity style={styles.quickLinkCard} activeOpacity={0.8} onPress={onPress}>
       <View style={[styles.quickLinkIcon, { backgroundColor: bg }]}>{icon}</View>
       <Text style={styles.quickLinkLabel}>{label}</Text>
     </TouchableOpacity>

@@ -9,6 +9,7 @@ import {
   TextInput,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -79,7 +80,10 @@ export default function ExploreScreen() {
 
         <Text style={styles.headerTitle}>Explore</Text>
 
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity 
+          style={styles.iconBtn} 
+          onPress={() => Alert.alert('Shopping Cart', 'Cart functionality is coming soon!')}
+        >
           <ShoppingBag size={22} color="#1E293B" />
         </TouchableOpacity>
 
@@ -150,10 +154,26 @@ export default function ExploreScreen() {
 
       {/* ── Bottom Navigation ────────────────────────────────────────────────── */}
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom + 6 }]}>
-        <NavItem icon={<Home size={24} color="#9CA3AF" />} label="Home" onPress={() => router.replace('/customer/dashboard')} />
-        <NavItem icon={<Search size={24} color="#EC5B13" />} label="Explore" active />
-        <NavItem icon={<ShoppingCart size={24} color="#9CA3AF" />} label="Cart" />
-        <NavItem icon={<User size={24} color="#9CA3AF" />} label="Profile" />
+        <NavItem 
+          icon={<Home size={24} color="#9CA3AF" />} 
+          label="Home" 
+          onPress={() => router.replace('/customer/dashboard')} 
+        />
+        <NavItem 
+          icon={<Search size={24} color="#EC5B13" />} 
+          label="Explore" 
+          active 
+        />
+        <NavItem 
+          icon={<ShoppingCart size={24} color="#9CA3AF" />} 
+          label="Cart" 
+          onPress={() => Alert.alert('Shopping Cart', 'Cart functionality is coming soon!')}
+        />
+        <NavItem 
+          icon={<User size={24} color="#9CA3AF" />} 
+          label="Profile" 
+          onPress={() => router.push('/customer/customer-profile')} 
+        />
       </View>
     </View>
   );

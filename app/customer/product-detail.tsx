@@ -214,8 +214,12 @@ export default function ProductDetailScreen() {
             label="Search"
             onPress={() => router.push('/customer/explore')}
           />
-          <NavItem icon={<ShoppingCart size={22} color="#9CA3AF" />} label="Cart" />
-          <NavItem icon={<User size={22} color="#9CA3AF" />} label="Profile" />
+          <NavItem 
+            icon={<ShoppingCart size={22} color="#9CA3AF" />} 
+            label="Cart" 
+            onPress={() => Alert.alert('Shopping Cart', 'Cart functionality is coming soon!')}
+          />
+          <NavItem icon={<User size={22} color="#9CA3AF" />} label="Profile" onPress={() => router.push('/customer/customer-profile')} />
         </View>
       </View>
     </View>

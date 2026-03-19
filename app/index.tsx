@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image, Dimensions, Animated, Modal, TouchableWithoutFeedback, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Dimensions, Animated, Modal, TouchableWithoutFeedback } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,14 +6,14 @@ import { ShoppingBag, Store, Globe, Check } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
+
 
 const { width, height } = Dimensions.get('window');
 
 export default function LandingPage() {
     const router = useRouter();
     const { t, language, setLanguage } = useLanguage();
-    const { isAuthenticated, user, isLoading: authLoading } = useAuth();
+
     const [isLangModalVisible, setIsLangModalVisible] = useState(false);
 
     const productImages = [
@@ -29,16 +29,6 @@ export default function LandingPage() {
     const floatAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Redirect logic: enforce login
-        if (!authLoading && isAuthenticated && user) {
-            // User is logged in
-            if (user.role.toLowerCase() === 'vendor') {
-                router.replace('/vendor/dashboard');
-            } else {
-                router.replace('/customer/dashboard');
-            }
-        }
-
         const startAnimation = () => {
             Animated.loop(
                 Animated.sequence([
@@ -58,22 +48,13 @@ export default function LandingPage() {
 
         const timeout = setTimeout(startAnimation, 100);
         return () => clearTimeout(timeout);
-    }, [isAuthenticated, user, authLoading]);
+    }, []);
 
     const changeLanguage = (lang: 'en' | 'ne') => {
         setLanguage(lang);
         setIsLangModalVisible(false);
     };
 
-    if (authLoading) {
-        return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <StatusBar style="light" />
-                <View style={styles.background} />
-                <ActivityIndicator size="large" color="#fff" />
-            </View>
-        );
-    }
 
     return (
         <View style={styles.container}>
